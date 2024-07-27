@@ -38,6 +38,9 @@ async def start_message(message: Message) -> None:
             'format': '',
             'score_first': 0,
             'score_second': 0,
+            'map': 0,
+            'rate_type': '',
+            'rate': ''
         }
         await message.answer(f"Здравствуйте, {html.bold(message.from_user.full_name)}, чтобы вы хотели от меня?",
                              reply_markup=kbr.start_kb)
@@ -56,6 +59,9 @@ async def predict_handler(message: Message) -> None:
             'format': '',
             'score_first': 0,
             'score_second': 0,
+            'map': 0,
+            'rate_type': '',
+            'rate': ''
         }
         await message.answer(f"Выбрать команду", reply_markup=kbr.commands_kb)
     except Exception as e:
@@ -103,7 +109,7 @@ async def callback_query_format(callback_query: CallbackQuery) -> None:
         dp['data']['format'] = callback_query.data.split()[1]
 
         await bot.send_message(chat_id=callback_query.from_user.id,
-                               text=f"Выбрать исход\n {html.bold(dp['data']['first_command'])} VS {html.bold(dp['data']['second_command'])}",
+                               text=f"Матч {html.bold(dp['data']['format'])}\n {html.bold(dp['data']['first_command'])} VS {html.bold(dp['data']['second_command'])}",
                                reply_markup=d[dp['data']['format']])
 
         return
@@ -160,20 +166,27 @@ async def callback_query_format_bo3(callback_query: CallbackQuery) -> None:
     bot = dp.get('bot')
     try:
         dp['data']['winner'] = callback_query.data.split()[1]
-        if dp['data']['winner'] == 'first_win':
+        if dp['data']['winner'] == 'two_zero':
+            dp['data']['score_first'] = 2
+            dp['data']['score_second'] = 0
+            dp['data']['winner'] = dp['data']['first_command']
+        elif dp['data']['winner'] == 'two_one':
             dp['data']['score_first'] = 2
             dp['data']['score_second'] = 1
             dp['data']['winner'] = dp['data']['first_command']
-        elif dp['data']['winner'] == 'second_win':
-            dp['data']['score_second'] = 2
+        elif dp['data']['winner'] == 'one_two':
             dp['data']['score_first'] = 1
+            dp['data']['score_second'] = 2
+            dp['data']['winner'] = dp['data']['second_command']
+        elif dp['data']['winner'] == 'zero_two':
+            dp['data']['score_first'] = 0
+            dp['data']['score_second'] = 2
             dp['data']['winner'] = dp['data']['second_command']
 
         await bot.send_message(chat_id=callback_query.from_user.id,
                                text=f"Матч {html.bold(dp['data']['format'])}, {html.bold(dp['data']['first_command'])} VS {html.bold(dp['data']['second_command'])}\n"
                                     f"{html.bold(dp['data']['score_first'])}:{html.bold(dp['data']['score_second'])}\n"
-                                    f"{'' if dp['data']['winner'] == 'draw' else 'Победитель -'} {html.bold(dp['data']['winner'])}",
-                               reply_markup=kbr.succ_kb)
+                                    f"Победитель - {html.bold(dp['data']['winner'])}", reply_markup=kbr.succ_kb)
     except Exception as e:
         await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_format_bo3_error" + e.message)
 
@@ -181,6 +194,7 @@ async def callback_query_format_bo3(callback_query: CallbackQuery) -> None:
 @dp.callback_query(MyFilter('__format_bo5__'))
 async def callback_query_format_bo5(callback_query: CallbackQuery) -> None:
     bot = dp.get('bot')
+    a = dp['data']
     try:
         dp['data']['winner'] = callback_query.data.split()[1]
         if dp['data']['winner'] == 'tree_zero':
@@ -216,14 +230,138 @@ async def callback_query_format_bo5(callback_query: CallbackQuery) -> None:
         await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_format_bo1_error" + e.message)
 
 
+@dp.callback_query(MyFilter('__map__'))
+async def callback_query_map(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    dp['data']['map'] = callback_query.data.split()[1]
+    try:
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text + f'\nКарта{dp["data"]["map"][-1]}', reply_markup=
+                               kbr.board)
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_map_error" + e.message)
+
+
+@dp.callback_query(MyFilter('__rates__'))
+async def callback_query_rates(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    a = dp['data']
+    d = {
+        'map_duration': kbr.map_duration,
+        'total_kills': kbr.total_kills,
+        'kill_handicap': kbr.kill_handicap,
+        'killing_race': kbr.killing_race
+    }
+    dp['data']['rate_type'] = callback_query.data.split()[1]
+    try:
+        if dp['data']['rate_type'] == 'first_command' or dp['data']['rate_type'] == 'second_command':
+            await bot.send_message(chat_id=callback_query.from_user.id,
+                                   text=callback_query.message.text + f'\nПобеда команды {dp["data"][dp["data"]["rate_type"]]}', reply_markup=kbr.succ_kb)
+        else:
+            await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text, reply_markup=d[dp['data']['rate_type']])
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_statistic_rates" + e.message)
+
+
+@dp.callback_query(MyFilter('__map_duration__'))
+async def callback_query_map_duration(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    dp['data']['rate'] = callback_query.data.split()[1]
+    try:
+        a = dp['data']['rate'][-2:]
+        b = dp['data']['rate'][-6:-2]
+        if b == 'less':
+            b = 'Меньше'
+        elif b == 'more':
+            b = 'Больше'
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text + '\n' + 'Продолжительность карты ' + b + ' ' + a,
+                               reply_markup=kbr.succ_kb)
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_map_duration_error" + e.message)
+
+
+@dp.callback_query(MyFilter('__total_kills__'))
+async def callback_query_total_kills(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    dp['data']['rate'] = callback_query.data.split()[1]
+    try:
+        a = dp['data']['rate'][-4:]
+        b = dp['data']['rate'][-8:-4]
+        if b == 'less':
+            b = 'Меньше'
+        elif b == 'more':
+            b = 'Больше'
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text + '\n' + 'Тотал убийств ' + b + ' ' + a, reply_markup=
+                               kbr.succ_kb)
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_total_kills_error" + e.message)
+
+
+@dp.callback_query(MyFilter('__kill_handicap__'))
+async def callback_query_total_kill_handicap(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    dp['data']['rate'] = [callback_query.data.split()[1], callback_query.data.split()[2]]
+    try:
+        a = dp['data']['rate'][0]
+        b = dp['data']['rate'][1]
+        if a == 'first':
+            a = dp['data']['first_command']
+        elif a == 'second':
+            a = dp['data']['second_command']
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text + '\n' + 'Фора по убийствам ' + b + ' ' + a, reply_markup=
+                               kbr.succ_kb)
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_total_kill_handicap_error" + e.message)
+
+
+@dp.callback_query(MyFilter('__killing_race__'))
+async def callback_query_total_killing_race(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    dp['data']['rate'] = [callback_query.data.split()[1], callback_query.data.split()[2]]
+    try:
+        a = dp['data']['rate'][0]
+        b = dp['data']['rate'][1]
+        if a == 'first':
+            a = dp['data']['first_command']
+        elif a == 'second':
+            a = dp['data']['second_command']
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text + '\n' + 'Гонка убийств ' + b + ' ' + a, reply_markup=
+                               kbr.succ_kb)
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_total_killing_race_error" + e.message)
+
 @dp.callback_query(MyFilter('__succecc__'))
 async def callback_query_succecc(callback_query: CallbackQuery) -> None:
     bot = dp.get('bot')
     try:
-        await bot.send_message(chat_id=chat_id,
-                               text=callback_query.message.text)
+        if callback_query.data.split()[1] == 'confirm':
+            await bot.send_message(chat_id=chat_id,
+                                   text=callback_query.message.text)
+        elif callback_query.data.split()[1] == 'cancel':
+            await bot.send_message(chat_id=callback_query.from_user.id, text=f"Что будем предсказывать?",
+                                   reply_markup=kbr.start_kb)
+
     except Exception as e:
         await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_succecc_error" + e.message)
+
+
+@dp.callback_query(MyFilter('__statistic__'))
+async def callback_query_statistic(callback_query: CallbackQuery) -> None:
+    bot = dp.get('bot')
+    a = kbr.map_list
+    try:
+        await bot.send_message(chat_id=callback_query.from_user.id,
+                               text=callback_query.message.text, reply_markup=
+                               InlineKeyboardMarkup(inline_keyboard=[
+                                   kbr.map_list[:int(callback_query.data[-1])],
+                               ]))
+    except Exception as e:
+        await bot.send_message(chat_id=callback_query.from_user.id, text="callback_query_statistic_error" + e.message)
 
 
 # @dp.message(CommandStart())
@@ -358,6 +496,9 @@ async def main() -> None:
         'format': '',
         'score_first': 0,
         'score_second': 0,
+        'map': 0,
+        'rate_type': '',
+        'rate': ''
     }
     dp.bot = bot
     await dp.start_polling(bot)
